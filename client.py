@@ -10,7 +10,8 @@ class client(object):
                  narms,
                  nclients,
                  palpha,
-                 fp):
+                 fp,
+                 weight):
         self.T = thorizon
         self.id = index
         self.K = narms
@@ -25,11 +26,11 @@ class client(object):
         self.global_mean = np.zeros(self.K)
         self.mixed_mean = np.zeros(self.K)
         self.reward = np.zeros(self.K)
-        
+        self.weight = weight
         self.pull = np.zeros(self.K)
         self.p_length = self.fp(self.p)
         self.Fp = 0
-        
+        self.mixed_mean_weighted = np.zeros(self.K)
         self.fphase = 0
         self.gphase = 0
         
@@ -62,6 +63,10 @@ class client(object):
         self.reward[play] += obs
         self.pull[play] += 1
         
+    def weight_update(self,new_weight):
+        self.weight = new_weight
+
+    
     def local_mean_update(self):
         #print('global',self.fphase,np.ceil((1-self.alpha)*self.p_length)*len(self.global_set))
         #print('local',self.gphase,np.ceil(self.M*self.alpha*self.p_length)*len(self.local_set))
@@ -75,13 +80,16 @@ class client(object):
     def global_mean_update(self,global_stat):
         self.global_mean = global_stat
         self.mixed_mean = self.alpha*self.local_mean+(1-self.alpha)*self.global_mean
+        self.mixed_mean_weighted = self.alpha*self.local_mean+(1-self.alpha)*self.global_mean*self.weight
         
     def local_set_update(self):
         Ep = set()
         self.Fp += self.p_length
         conf_bound = np.sqrt(np.log(self.T)/(self.M*self.Fp))
         for i in list(self.local_set):
-            if self.mixed_mean[i]+conf_bound < max(self.mixed_mean-conf_bound):
+            # if self.mixed_mean[i]+conf_bound < max(self.mixed_mean-conf_bound):
+            #     Ep.add(i)
+            if self.mixed_mean_weighted[i]+conf_bound < max(self.mixed_mean_weighted-conf_bound):
                 Ep.add(i)
         self.local_set = self.local_set-Ep
         

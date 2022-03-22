@@ -25,7 +25,7 @@ class PFEDUCB(object):
 
 		self.global_means = np.sum(self.local_means, axis=0)/self.M
 		self.clients = [
-			client(index=i, thorizon=self.T, narms=self.K, nclients=self.M, palpha=self.alpha, fp=fun_fp) for i in range(self.M)
+			client(index=i, thorizon=self.T, narms=self.K, nclients=self.M, palpha=self.alpha, fp=fun_fp, weight=weights[i]) for i in range(self.M)
 		]
 		self.server = server(narms=self.K, nclients=self.M)
 		# print("local_means =", self.local_means)
@@ -46,12 +46,12 @@ class PFEDUCB(object):
 		global_rewards = np.array([global_rews[plays[i]]
 								  for i in range(self.M)])
 		weighted_global_rewards = global_rewards * self.weights
-		# mixed_rewards = self.alpha*local_rewards+(1-self.alpha)*global_rewards
-		mixed_rewards = self.alpha*local_rewards + \
-			(1-self.alpha)*weighted_global_rewards
+		mixed_rewards = self.alpha*local_rewards+(1-self.alpha)*global_rewards
+		mixed_rewards_weighted = self.alpha*local_rewards + (1-self.alpha)*weighted_global_rewards
+		
 		#rewards = np.array([self.alpha*local_rews[i,plays[i]]+(1-self.alpha)*global_rews[plays[i]] for i in range(self.M)])
 
-		return local_rewards, global_rewards, mixed_rewards, local_rews, global_rews
+		return local_rewards, global_rewards, mixed_rewards, local_rews, global_rews, mixed_rewards_weighted
 
 	def simulate(self):
 		"""
@@ -69,7 +69,7 @@ class PFEDUCB(object):
 			plays = np.zeros(self.M)
 
 			plays = [(int)(client.play()) for client in self.clients]
-			local_rews, global_rews, mixed_rews, local_mk, global_k = self.simulate_single_step(
+			local_rews, global_rews, mixed_rews, local_mk, global_k,mixed_rews_weighted = self.simulate_single_step(
 				plays)
 			# obs, rews = self.simulate_single_step(plays)  # observations of all players
 			# print("local_mk ", local_mk)
@@ -82,9 +82,9 @@ class PFEDUCB(object):
 			
 			for i in range(self.M):
 				best_arms[i] = np.argmax(self.alpha*local_mk[i] + (1-self.alpha)*global_k)
-				high_mixed_means[i] = self.alpha*local_mk[i][best_arms[i]] + (1-self.alpha)*global_k[best_arms[i]]*self.weights[i]
+				high_mixed_means[i] = self.alpha*local_mk[i][best_arms[i]] + (1-self.alpha)*global_k[best_arms[i]]
 				top_arms[i] = np.argmax(self.alpha*self.local_means[i]+(1-self.alpha)*self.global_means)
-				top_mixed_means[i] = self.alpha*self.local_means[i][top_arms[i]] + (1-self.alpha)*self.global_means[top_arms[i]]*self.weights[i]
+				top_mixed_means[i] = self.alpha*self.local_means[i][top_arms[i]] + (1-self.alpha)*self.global_means[top_arms[i]]
 				client_regret[i] = abs(top_mixed_means[i]-high_mixed_means[i])
 				client_regrets[i]+=client_regret[i]
 			new_weights = np.array([client_regret[i]/np.sum(client_regret) for i in range(self.M)])
@@ -119,6 +119,7 @@ class PFEDUCB(object):
 				#print(t," global-set:",global_set)
 				for i in range(self.M):
 					self.clients[i].global_set_update(global_set)
+					self.clients[i].weight_update(self.weights[i])
 					local_rewards[-1] -= 2*self.C
 					global_rewards[-1] -= 2*self.C
 					mixed_rewards[-1] -= 2*self.C
@@ -144,6 +145,7 @@ class PFEDUCB(object):
 		# print("standrard deviation = ",np.std(client_regrets))
 
 		regret = best_case_reward - cumulated_mixed_reward
+		print("Regret is",regret)
 #        print(cumulated_mixed_reward)
 #        print(best_case_reward)
 #        print('regret:',regret[-1], "comm: ", self.comm)
